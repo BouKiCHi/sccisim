@@ -1,0 +1,93 @@
+/*
+NLG.h
+ 2014-12-29
+ 定義の追加
+
+*/
+
+#ifndef __NLG_H__
+#define __NLG_H__
+
+#include <stdio.h>
+
+#ifdef _WIN32
+#define PATH_SEP '\\'
+#else
+#define PATH_SEP '/'
+#endif
+
+typedef struct {
+    FILE *file;
+    char title[80];
+    int  baseclk;
+    int  tick;
+    int  length;
+    int  loop_ptr;
+    int  version;
+
+    int  ctc0;
+    int  ctc3;
+    int  irq_count;
+
+    int mode;
+} NLGCTX;
+
+NLGCTX *OpenNLG(const char *file);
+void CloseNLG(NLGCTX *ctx);
+
+int  ReadNLG(NLGCTX *ctx);
+long  TellNLG(NLGCTX *ctx);
+void SeekNLG(NLGCTX *ctx, long pos);
+
+
+#ifndef NLG_READONLY
+
+void WriteHeaderNLG(NLGCTX *ctx);
+NLGCTX *CreateNLG(const char *file);
+void WriteNLG_IRQ(NLGCTX *ctx);
+void WriteNLG_CMD(NLGCTX *ctx, int cmd);
+void WriteNLG_CTC(NLGCTX *ctx, int cmd, int ctc);
+void WriteNLG_Data(NLGCTX *ctx, int cmd, int addr, int data);
+
+void WriteNLG_SetBaseClock(NLGCTX *ctx, int clock);
+
+typedef void (*NLG_WRITELOG)(NLGCTX *ctx, int cmd, int addr, int data);
+
+#endif
+
+char *GetTitleNLG(NLGCTX *ctx);
+int GetTickNLG(NLGCTX *ctx);
+// NLGの現在のtickをマイクロ秒で返す
+int GetTickUsNLG(NLGCTX *ctx);
+
+int GetLengthNLG(NLGCTX *ctx);
+int GetLoopPtrNLG(NLGCTX *ctx);
+int  GetBaseClkNLG(NLGCTX *ctx);
+
+void SetCTC0_NLG(NLGCTX *ctx, int value);
+void SetCTC3_NLG(NLGCTX *ctx, int value);
+
+
+#define NLG_READ  0x00
+#define NLG_WRITE 0x01
+
+#define CMD_PSG  0x00
+#define CMD_OPM  0x01
+#define CMD_OPM2 0x02
+#define CMD_IRQ  0x80
+
+#define CMD_FM1 0x01
+#define CMD_FM2 0x02
+#define CMD_FM3 0x03
+
+
+#define CMD_DEV1  0x00
+#define CMD_DEV2  0x01
+#define CMD_DEV3  0x02
+
+
+#define CMD_CTC0 0x81
+#define CMD_CTC3 0x82
+
+
+#endif

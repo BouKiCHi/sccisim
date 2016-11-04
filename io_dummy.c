@@ -1,0 +1,15 @@
+int (*ioview_ioread_DEV_2A03   )(int a);
+int (*ioview_ioread_DEV_FDS    )(int a);
+int (*ioview_ioread_DEV_MMC5   )(int a);
+int (*ioview_ioread_DEV_VRC6   )(int a);
+int (*ioview_ioread_DEV_N106   )(int a);
+int (*ioview_ioread_DEV_DMG    )(int a);
+int (*ioview_ioread_DEV_HUC6230)(int a);
+int (*ioview_ioread_DEV_AY8910 )(int a);
+int (*ioview_ioread_DEV_SN76489)(int a);
+int (*ioview_ioread_DEV_SCC    )(int a);
+int (*ioview_ioread_DEV_OPL    )(int a);
+int (*ioview_ioread_DEV_OPLL   )(int a);
+int (*ioview_ioread_DEV_ADPCM  )(int a);
+int (*ioview_ioread_DEV_ADPCM2 )(int a);
+int (*ioview_ioread_DEV_MSX    )(int a);

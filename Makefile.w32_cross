@@ -1,0 +1,51 @@
+#
+# Nakefile for MinGW32
+#
+
+SFX = .dll
+
+#
+# Commands for building
+#
+ifeq ($(OS),Windows_NT)
+PREFIX=
+else
+PREFIX=i586-mingw32-
+endif
+
+CC = $(PREFIX)gcc
+CXX = $(PREFIX)g++
+STRIP=$(PREFIX)strip
+AR=$(PREFIX)ar
+DLLTOOL = $(PREFIX)dlltool
+DLLWRAP = $(PREFIX)dllwrap
+
+
+#
+# Target name
+#
+
+ifdef DEBUG
+OBJDIR = obj-w32-debug
+DBGNAME = _dbg
+
+else
+
+OBJDIR=obj-w32
+DBGNAME = 
+
+endif
+
+TARGET = $(NAME)$(DBGNAME)$(SFX)
+TARGET_S = $(NAME)$(DBGNAME)_s$(SFX)
+
+
+TEST = dtest$(DBGNAME).exe
+
+
+SLIBS += -ldinput8
+
+#
+# switchs
+#
+all : dynamic

@@ -1,0 +1,58 @@
+#
+# Makefile for nezplay
+#
+
+#
+# DEBUG mode
+#
+
+# DEBUG = 1
+
+ifndef DEBUG
+
+OBJDIR   = obj-x86-gcc
+TARGET   = $(NAME)
+TARGET_S = $(NAME)_s
+
+else
+
+OBJDIR   = obj-x86-gcc-dbg
+TARGET   = $(NAME)_dbg
+TARGET_S = $(NAME)_dbg_s
+
+endif
+
+TEST = dtest
+
+STRIP = strip
+
+AR  = ar
+CC  = gcc
+CXX = g++
+DLLTOOL = dlltool
+DLLWRAP = dllwrap
+
+CFLAGS = $(ARCHFLAGS) -g
+LFLAGS = $(ARCHFLAGS) -g
+
+ifndef DEBUG
+CFLAGS += -O3
+else
+CFLAGS += -DDEBUG
+endif
+
+#
+#
+#
+
+all : $(TARGET)
+
+
+#
+# Options
+#
+
+install : $(TARGET)
+	cp $(TARGET) /usr/local/bin/
+
+
