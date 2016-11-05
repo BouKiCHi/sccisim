@@ -46,7 +46,6 @@ static struct
 
 
 /// ログ
-
 void OpenDebugLog() {
   if (fp != NULL) return;
   fp = fopen("sccisim.log","a+");
