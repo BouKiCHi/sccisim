@@ -1,5 +1,4 @@
 #include "sccisim.h"
-#include "SCCIDefines.h"
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -127,7 +126,6 @@ void LoadSetting(void) {
 }
 
 /// レンダラ
-
 static void RenderWriteProc(void *lpargs, void *lpbuf, unsigned len) {
 	if (dllctx.pos >= 0) DoRender((short *)lpbuf, len>>2); 
   else memset(lpbuf, 0, len);
@@ -251,15 +249,17 @@ class SIMCHIP : public SoundChip {
   int devid_;
   int sc_type_;
   int logid_;
+  int clock_;
 
   BYTE Reg[0x200];
 
   public:
 
-  SIMCHIP(int devid, int sc_type, int logid) {
+  SIMCHIP(int devid, int logid, int sc_type, int clock) {
     devid_ = devid;
     sc_type_ = sc_type;
     logid_ = logid;
+    clock_ = clock;
   }
 
   int getDeviceId() {
@@ -313,7 +313,7 @@ class SIMCHIP : public SoundChip {
 	// get sound chip clock
    DWORD __stdcall getSoundChipClock() {
      // OutputLog("getSoundChipClock");
-     return 0x00;
+     return clock_;
    }
 	// get writed register data
    DWORD __stdcall getWrittenRegisterData(DWORD addr) {
@@ -389,7 +389,7 @@ class SIMBody : public SoundInterfaceManager {
       int log_id = 0;
       OpenSoundLog();
       if (dllctx.logctx) log_id = AddMapLOG(dllctx.logctx, log_type, clock, prio);
-      return new SIMCHIP(id, iSoundChipType, log_id);
+      return new SIMCHIP(id, log_id, iSoundChipType, clock);
     }
     return NULL;
   }
