@@ -20,7 +20,9 @@ unsigned char chmask[0x200];
 #define DEF_CH 2
 
 #define DLL_VER 0x100
-#define DLL_VERSTR "SCCISIM.DLL 161104"
+#define DLL_VERSTR "SCCISIM.DLL 161109"
+
+#define SIM_MAXCHIP 8
 
 // コンテキスト
 static struct 
@@ -34,6 +36,10 @@ static struct
   int soundlog;
   int soundlog_start;
   int nlgmode;
+
+  int maxchip;
+  int chiptype[SIM_MAXCHIP];
+  int chipclock[SIM_MAXCHIP];
 
   DWORD current_time;
   int wait_count;
@@ -92,6 +98,14 @@ void WriteSettingInt(const char *Key, int Value) {
   WriteSettingString(Key,Buf);
 }
 
+void WriteSettingIndexInt(const char *Key, int Index, int Value) {
+  char KeyBuf[256];
+  char Buf[256];
+  sprintf(KeyBuf,"%s%d",Key,Index);
+  sprintf(Buf,"%d",Value);
+  WriteSettingString(KeyBuf,Buf);
+}
+
 int GetSettingInt(const char *Key) {
   int Result = 0;
   char Buf[256];
@@ -100,6 +114,26 @@ int GetSettingInt(const char *Key) {
   return Result;
 }
 
+int GetSettingIndexInt(const char *Key,int Index) {
+  int Result = 0;
+  char KeyBuf[256];
+  char Buf[256];
+  sprintf(KeyBuf,"%s%d",Key,Index);
+  GetPrivateProfileString(PROG_NAME,KeyBuf,"",Buf,256, PROG_INI);
+  sscanf(Buf,"%d",&Result);
+  return Result;
+}
+
+int SimDefaultChips[] = {
+SC_TYPE_YM2608,
+SC_TYPE_YM2151,
+SC_TYPE_YM2151,
+SC_TYPE_YM2413,
+SC_TYPE_YM2413,
+SC_TYPE_YMZ294,
+SC_TYPE_YMZ294
+};
+
 void SaveDefaultSetting() {
   OutputLog("SaveDefaultSetting");
 
@@ -107,6 +141,10 @@ void SaveDefaultSetting() {
   WriteSettingInt("soundlog", 0);
   WriteSettingInt("nlgmode", 0);
   WriteSettingInt("freq", 44100);
+  int maxchip = sizeof(SimDefaultChips) / sizeof(int);
+  WriteSettingInt("maxchip", maxchip);
+  for(int i = 0; i < maxchip; i++) WriteSettingIndexInt("chiptype", i, SimDefaultChips[i]);
+  for(int i = 0; i < maxchip; i++) WriteSettingIndexInt("chipclock", i, 0);  
 }
 
 void LoadSetting(void) {
@@ -122,6 +160,22 @@ void LoadSetting(void) {
   dllctx.soundlog = GetSettingInt("soundlog");
   dllctx.nlgmode = GetSettingInt("nlgmode");
   dllctx.freq = GetSettingInt("freq");
+  dllctx.maxchip = GetSettingInt("maxchip");
+  if (dllctx.maxchip >= SIM_MAXCHIP) dllctx.maxchip = SIM_MAXCHIP;  
+
+  if (dllctx.maxchip == 0) {
+      int maxchip = sizeof(SimDefaultChips) / sizeof(int);
+      dllctx.maxchip = maxchip;
+      for(int i = 0; i < maxchip; i++) {
+        dllctx.chiptype[i] = SimDefaultChips[i];
+        dllctx.chipclock[i] = 0;
+      }
+  } else {
+    for(int i = 0; i < dllctx.maxchip; i++) {
+      dllctx.chiptype[i] = GetSettingIndexInt("chiptype",i);
+      dllctx.chipclock[i] = GetSettingIndexInt("chipclock",i);
+    }
+  }
 }
 
 /// レンダラ
@@ -244,13 +298,16 @@ void SimWriteDevice(int id, int addr, int data) {
 	WriteDevice(id, addr, data);
 }
 
+///////////////////////////////////////////////
+
 class SIMCHIP : public SoundChip {
   int devid_;
   int sc_type_;
   int logid_;
   int clock_;
 
-  BYTE Reg[0x200];
+  BYTE Reg_[0x200];
+  SCCI_SOUND_CHIP_INFO chipinfo_;
 
   public:
 
@@ -259,6 +316,10 @@ class SIMCHIP : public SoundChip {
     sc_type_ = sc_type;
     logid_ = logid;
     clock_ = clock;
+
+    memset(&chipinfo_,0,sizeof(SCCI_SOUND_CHIP_INFO));
+    chipinfo_.iSoundChip = sc_type;
+    chipinfo_.dClock = clock;
   }
 
   int getDeviceId() {
@@ -267,8 +328,9 @@ class SIMCHIP : public SoundChip {
 
   SCCI_SOUND_CHIP_INFO* __stdcall getSoundChipInfo() {
     OutputLog("getSoundChipInfo");
-    return NULL;
+    return &chipinfo_;
   }
+
 	// get sound chip type
    int __stdcall getSoundChipType() {
      OutputLog("getSoundChipType");
@@ -276,7 +338,7 @@ class SIMCHIP : public SoundChip {
    }
 	// set Register data
    BOOL __stdcall setRegister(DWORD dAddr,DWORD dData) {
-     Reg[dAddr&0x1ff] = dData;
+     Reg_[dAddr&0x1ff] = dData;
      if (dllctx.logctx) {
         DWORD now_time = timeGetTime();
         if (!dllctx.soundlog_start) {
@@ -316,7 +378,7 @@ class SIMCHIP : public SoundChip {
    }
 	// get writed register data
    DWORD __stdcall getWrittenRegisterData(DWORD addr) {
-     return Reg[addr&0x1ff];
+     return Reg_[addr&0x1ff];
    }
 	// buffer check
    BOOL __stdcall isBufferEmpty() {
@@ -325,35 +387,55 @@ class SIMCHIP : public SoundChip {
    }
 };
 
-class SIMBody : public SoundInterfaceManager {
+class SimChipManager {
+  SoundChip *chip_[SIM_MAXCHIP];
 
-  int __stdcall getInterfaceCount() {
-    OutputLog("getInterfaceCount");
-    return 2;
+  public:
+  SimChipManager() {
+    for(int i=0; i<SIM_MAXCHIP; i++) chip_[i] = NULL;
   }
-  SCCI_INTERFACE_INFO* __stdcall getInterfaceInfo(int iInterfaceNo) {
-    OutputLog("getInterfaceInfo");
+
+  ~SimChipManager() {
+    int i = 0;
+    for(i=0; i<SIM_MAXCHIP; i++) { 
+      if (chip_[i] == NULL) continue;
+      delete chip_[i]; chip_[i] = NULL; 
+    }
+  }
+
+  int GetSoundChipCount() {
+     return dllctx.maxchip;
+  } 
+
+  SoundChip* GetSoundChip(int index) {
+    OutputLog("SimChipManager:GetSoundChip");
+
+    if (index < 0 || index >= dllctx.maxchip) return NULL;
+    int ct = dllctx.chiptype[index];
+    int cc = dllctx.chipclock[index];
+    chip_[index] = MakeSimChip(ct,cc);
+    return chip_[index];
+  }
+
+  SoundChip* GetSoundChipByType(int iSoundChipType) {
+    OutputLog("SimChipManager:GetSoundChipByType");
+    for(int i = 0; i < dllctx.maxchip; i++) {
+      if (iSoundChipType != dllctx.chiptype[i] || chip_[i] != NULL) continue;
+      return GetSoundChip(i);
+    }
     return NULL;
   }
-  SoundInterface* __stdcall getInterface(int iInterfaceNo) {
-    OutputLog("getInterface");
-    return NULL;
-  }
-  BOOL __stdcall releaseInterface(SoundInterface* pSoundInterface) {
-    OutputLog("releaseInterface");
-    return true;
-  }
-  BOOL __stdcall releaseAllInterface() {
-    OutputLog("releaseAllInterface");
-    return true;
-  }
-  SoundChip* __stdcall getSoundChip(int iSoundChipType,DWORD dClock) {
+
+
+  SoundChip* MakeSimChip(int iSoundChipType,DWORD dClock) 
+  {
     int id = -1;
     int clock = dClock;
     int prio = 1;
     int log_type = LOG_TYPE_OPNA;
 
-    OutputLog("getSoundChip:%d,%d",iSoundChipType, dClock);
+    OutputLog("SimChipManager:MakeSimChip");
+
     switch(iSoundChipType) {
       case SC_TYPE_YM2151:
         if (clock == 0) clock = RENDER_BC_4M;        
@@ -392,84 +474,175 @@ class SIMBody : public SoundInterfaceManager {
     }
     return NULL;
   }
-  BOOL __stdcall releaseSoundChip(SoundChip* pSoundChip) {
-    OutputLog("releaseSoundChip");
-    if (pSoundChip == NULL) return false;
+
+  void ReleaseSimChip(SoundChip *pSoundChip) {
+    if (pSoundChip == NULL) return;
     int id = ((SIMCHIP *)pSoundChip)->getDeviceId();
     DeleteRender(id);
-    delete pSoundChip;
+
+    OutputLog("SimChipManager:ReleaseSimChip");
+
+    for(int i=0; i < SIM_MAXCHIP; i++) {
+      if (chip_[i] != pSoundChip) continue;
+      delete pSoundChip;
+      chip_[i] = NULL;
+      break;
+    }
     CloseSoundLog();
+  }
+};
+
+SimChipManager *scman = NULL;
+
+class SIMSI : public SoundInterface {
+
+	BOOL __stdcall isSupportLowLevelApi() {
+    OutputLog("SIMSI:isSupportLowLevelApi");
+    return true; 
+  }
+	BOOL __stdcall setData(BYTE *pData,DWORD dSendDataLen) {
+    OutputLog("SIMSI:setData");
+    return true;
+  }
+	DWORD __stdcall getData(BYTE *pData,DWORD dGetDataLen) {
+    OutputLog("SIMSI:getData");
+    return true;
+  }
+	BOOL __stdcall setDelay(DWORD dDelay) {
+    OutputLog("SIMSI:setDelay");
+    return true;
+  }
+	DWORD __stdcall getDelay() {
+    OutputLog("SIMSI:getDelay");
+    return true;
+  }
+	BOOL __stdcall reset() {
+    OutputLog("SIMSI:reset");
+    return true;
+  }
+	BOOL __stdcall init() {
+    OutputLog("SIMSI:init");
+    return true;
+  }
+	DWORD	__stdcall getSoundChipCount() {
+    OutputLog("SIMSI:getSoundChipCount");
+    return scman->GetSoundChipCount();
+  }
+	SoundChip* __stdcall getSoundChip(DWORD dNum) {
+    return scman->GetSoundChip(dNum);
+  }
+};
+
+class SIMBody : public SoundInterfaceManager {
+  SCCI_INTERFACE_INFO SIInfo;
+
+  public:
+  SIMBody() {
+    memset(&SIInfo,0,sizeof(SCCI_INTERFACE_INFO));
+    strcpy(SIInfo.cInterfaceName,"SCCISIM");
+    SIInfo.iSoundChipCount = dllctx.maxchip;
+  }
+
+  int __stdcall getInterfaceCount() {
+    OutputLog("SIMBody:getInterfaceCount");
+    return 1;
+  }
+
+  SCCI_INTERFACE_INFO* __stdcall getInterfaceInfo(int iInterfaceNo) {
+    OutputLog("SIMBody:getInterfaceInfo");
+    return &SIInfo;
+  }
+  SoundInterface* __stdcall getInterface(int iInterfaceNo) {
+    OutputLog("SIMBody:getInterface");
+    return new SIMSI();
+  }
+  BOOL __stdcall releaseInterface(SoundInterface* pSoundInterface) {
+    delete pSoundInterface;
+    OutputLog("SIMBody:releaseInterface");
+    return true;
+  }
+  BOOL __stdcall releaseAllInterface() {
+    OutputLog("SIMBody:releaseAllInterface");
+    return true;
+  }
+  SoundChip* __stdcall getSoundChip(int iSoundChipType,DWORD dClock) {
+    OutputLog("SIMBody:getSoundChip:%d,%d",iSoundChipType, dClock);
+    return scman->GetSoundChipByType(iSoundChipType);
+  }
+  BOOL __stdcall releaseSoundChip(SoundChip* pSoundChip) {
+    OutputLog("SIMBody:releaseSoundChip");
+    scman->ReleaseSimChip(pSoundChip);
     return true;
   }
   BOOL __stdcall releaseAllSoundChip() {
-    OutputLog("releaseAllSoundChip");
+    OutputLog("SIMBody:releaseAllSoundChip");
     return true;
   }
   BOOL __stdcall setDelay(DWORD dMSec) {
-    OutputLog("setDelay");
+    OutputLog("SIMBody:setDelay");
     return true;
   }
   DWORD __stdcall getDelay() {
-    OutputLog("getDelay");
+    OutputLog("SIMBody:getDelay");
     return 0;
   }
   BOOL __stdcall reset() {
-    OutputLog("reset");
+    OutputLog("SIMBody:reset");
     return true;
   }
   BOOL __stdcall init() {
-    OutputLog("init");
+    OutputLog("SIMBody:init");
     return true;
   }
   DLLDECL BOOL __stdcall initializeInstance() {
-    OutputLog("initializeInstance");
+    OutputLog("SIMBody:initializeInstance");
     return true;
   }
   BOOL __stdcall releaseInstance() {
-    OutputLog("releaseInstance");
+    OutputLog("SIMBody:releaseInstance");
     Free();
     return true;
   }
   BOOL __stdcall config() {
-    OutputLog("config");
+    OutputLog("SIMBody:config");
     return true;
   }
   DWORD __stdcall getVersion(DWORD *pMVersion) {
-    OutputLog("getVersion");
+    OutputLog("SIMBody:getVersion");
     return 0;
   }
   BOOL __stdcall isValidLevelDisp() {
-    OutputLog("isValidLevelDisp");
+    OutputLog("SIMBody:isValidLevelDisp");
     return true;
   }
   BOOL __stdcall isLevelDisp() {
-    OutputLog("isLevelDisp");
+    OutputLog("SIMBody:isLevelDisp");
     return true;
   }
   void __stdcall setLevelDisp(BOOL bDisp) {
-    OutputLog("setLevelDisp");
+    OutputLog("SIMBody:setLevelDisp");
   }
   void __stdcall setMode(int iMode) {
-    OutputLog("setMode:%d",iMode);
+    OutputLog("SIMBody:setMode:%d",iMode);
   }
   void __stdcall sendData() {
-    // OutputLog("sendData");
+    // OutputLog("SIMBody:sendData");
   }
   void __stdcall clearBuff() {
-    OutputLog("clearBuff");
+    OutputLog("SIMBody:clearBuff");
   }
   void __stdcall setAcquisitionMode(int iMode) {
-    OutputLog("setAcquisitionMode");
+    OutputLog("SIMBody:setAcquisitionMode");
   }
   void __stdcall setAcquisitionModeClockRenge(DWORD dClock) {
-    OutputLog("setAcquisitionModeClockRenge");
+    OutputLog("SIMBody:setAcquisitionModeClockRenge");
   }
   BOOL __stdcall setCommandBuffetSize(DWORD dBuffSize) {
-    OutputLog("setCommandBuffetSize");
+    OutputLog("SIMBody:setCommandBuffetSize");
     return true;
   }
   BOOL __stdcall isBufferEmpty() {
-    OutputLog("isBufferEmpty");
+    OutputLog("SIMBody:isBufferEmpty");
     return true;
   }
 };
@@ -481,6 +654,8 @@ extern "C" DLLDECL SoundInterfaceManager* __cdecl getSoundInterfaceManager() {
 
   Init();
   Play();
+
+  scman = new SimChipManager();
 
   SoundInterfaceManager *sim = new SIMBody();
   sim->initializeInstance();

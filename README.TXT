@@ -1,4 +1,4 @@
-SCCISIM ver 1.01
+SCCISIM ver 1.02
 
 ■これは何？
 　SCCI音源シミュレータです。
@@ -12,8 +12,28 @@ SCCISIM ver 1.01
 　scci.dllが必要なアプリケーションと同じフォルダにscci.dllを置いてください。
 sccisim.iniは無ければ自動で生成されます。
 
+■sccisim.ini設定一例
+debuglog : 1でコンソール表示内容をログファイル出力
+soundlog : 1で音源ログ出力。
+nlgmode : 1でNLGで音源ログを出力
+freq : シミュレータ再生周波数
+maxchip : 払い出し可能な最大チップ数
+chiptype0 - chiptype7 : チップの種類
+chipclock0 - chipclock7 : チップクロック
+
+■チップの種類
+現在はSC_CHIP_TYPEと同じ数字で設定。
+主なSC_CHIP_TYPE
+YM2608 : 1
+YM2151 : 2
+YM2151 : 2
+YM2413 : 10
 
 ■履歴
+20161109
+SoundInterface周りをひとまず実装した。
+SoundChipの生成方法を変更した。
+
 20161106
 チップのクロックを返すようにした。(OPNAが使用可能になった)
 
