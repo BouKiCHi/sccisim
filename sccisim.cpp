@@ -163,7 +163,9 @@ void LoadSetting(void) {
   dllctx.maxchip = GetSettingInt("maxchip");
   if (dllctx.maxchip >= SIM_MAXCHIP) dllctx.maxchip = SIM_MAXCHIP;  
 
+  OutputLog("MaxChip:%d",dllctx.maxchip);
   if (dllctx.maxchip == 0) {
+      OutputLog("load default chips");
       int maxchip = sizeof(SimDefaultChips) / sizeof(int);
       dllctx.maxchip = maxchip;
       for(int i = 0; i < maxchip; i++) {
@@ -172,8 +174,11 @@ void LoadSetting(void) {
       }
   } else {
     for(int i = 0; i < dllctx.maxchip; i++) {
-      dllctx.chiptype[i] = GetSettingIndexInt("chiptype",i);
-      dllctx.chipclock[i] = GetSettingIndexInt("chipclock",i);
+      int ct = GetSettingIndexInt("chiptype",i);
+      int cc = GetSettingIndexInt("chipclock",i);
+      dllctx.chiptype[i] = ct;
+      dllctx.chipclock[i] = cc;
+      OutputLog("Type:%d Clock:%d",ct,cc);
     }
   }
 }
