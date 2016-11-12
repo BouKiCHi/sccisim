@@ -171,7 +171,7 @@ CFLAGS += -I.
 
 
 ifdef DEBUG
-CFLAGS += -g
+CFLAGS += -O0 -g
 else
 CFLAGS += -O3
 endif

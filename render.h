@@ -41,6 +41,7 @@ typedef struct
 	int freq;
 	int use_gmc;
 	int opm_count;
+    float vol;
 } RenderSetting;
 
 #ifdef __cplusplus

@@ -10,6 +10,7 @@ typedef struct {
 	unsigned bit;
 	unsigned ch;
 	unsigned freq;
+	unsigned blocklen;
 	/* callback */
 	void *lpargs;
 	void (*Write)(void *lpargs, void *lpbuf, unsigned len);

@@ -49,6 +49,7 @@ static struct {
 	KMIF_SOUND_DEVICE *kmif;
 	int bc;
 	int freq;
+	float vol;
 } dev[DEV_MAX];
 
 // static KMIF_SOUND_DEVICE *dev[DEV_MAX];
@@ -96,9 +97,15 @@ void DoRender(short *outp, int len)
 	{
 		accum[0] = accum[1] = 0;
 
-		for(j = 0; j < dev_count; j++)
+		for(j = 0; j < dev_count; j++) {
+			Int32 tmp[2] = { 0, 0 };
+
 			if (dev[j].kmif)
-				dev[j].kmif->synth(dev[j].kmif->ctx, accum);
+				dev[j].kmif->synth(dev[j].kmif->ctx, tmp);
+
+			accum[0] += (dev[j].vol * tmp[0]);
+			accum[1] += (dev[j].vol * tmp[1]);
+		}
 
 		for(ch=0; ch < 2; ch++)
 		{
@@ -261,8 +268,6 @@ int AddRender(RenderSetting *rs)
     
     if (kmif)
     {
-    	// デバイスカウントを進めて初期設定を行う
-
         kmif->output_device = OUT_INT;
         if (rs->use_gmc)
             kmif->output_device |= OUT_EXT;
@@ -270,6 +275,7 @@ int AddRender(RenderSetting *rs)
 
         dev[id].kmif = kmif;
 
+        dev[id].vol = rs->vol;
         dev[id].bc = rs->baseclock;
         dev[id].freq = rs->freq;
         ResetRender(id);

@@ -38,6 +38,7 @@ typedef struct {
 	BOOL killthread;
 	DWORD nextpos;
 	DWORD maxpos;
+	DWORD blocklen;
 } SOUNDDEVICE_DS;
 
 #define BLOCKBIT	12
@@ -91,25 +92,25 @@ static void Write(SOUNDDEVICE_DS *psdds)
 	hr = IDirectSoundBuffer_GetCurrentPosition(SD->lpdsb, &pp, &wp);
 	if (FAILED(hr)) return;
 
-	cp = pp & ~(BLOCKLEN-1);
+	cp = pp & ~(SD->blocklen-1);
 
 	while (SD->nextpos != cp)
 	{
-		SD->sd.sdid.Write(SD->sd.sdid.lpargs, mixbuf, BLOCKLEN);
-		hr = IDirectSoundBuffer_Lock(SD->lpdsb, SD->nextpos, BLOCKLEN, (LPVOID *)&buf1, &len1, (LPVOID *)&buf2, &len2, 0);
+		SD->sd.sdid.Write(SD->sd.sdid.lpargs, mixbuf, SD->blocklen);
+		hr = IDirectSoundBuffer_Lock(SD->lpdsb, SD->nextpos, SD->blocklen, (LPVOID *)&buf1, &len1, (LPVOID *)&buf2, &len2, 0);
 		if (FAILED(hr)) return;
 		if (buf1)
 		{
-			out1 = (len1 > BLOCKLEN) ? BLOCKLEN : len1;
+			out1 = (len1 > SD->blocklen) ? SD->blocklen : len1;
 			memcpy(buf1, mixbuf, out1);
 		}
 		else
 		{
 			out1 = 0;
 		}
-		if (buf2 && BLOCKLEN > out1)
+		if (buf2 && SD->blocklen > out1)
 		{
-			out2 = BLOCKLEN - out1;
+			out2 = SD->blocklen - out1;
 			if (out2 > len2) out2 = len2;
 			memcpy(buf2, mixbuf + out1, out2);
 		}
@@ -118,7 +119,7 @@ static void Write(SOUNDDEVICE_DS *psdds)
 			out2 = 0;
 		}
 		IDirectSoundBuffer_Unlock(SD->lpdsb, buf1, out1, buf2, out2);
-		SD->nextpos += BLOCKLEN;
+		SD->nextpos += SD->blocklen;
 		if (SD->nextpos >= SD->maxpos)
 			SD->nextpos -= SD->maxpos;
 	}
@@ -167,8 +168,9 @@ SOUNDDEVICE *CreateSoundDeviceDX3(SOUNDDEVICEINITDATA *psdid)
 		SD->hevent = NULL;
 		SD->hthread = NULL;
 		SD->killthread = FALSE;
-		SD->nextpos = BLOCKLEN;
-		SD->maxpos = BLOCKLEN * BLOCKNUM;
+		SD->blocklen = (psdid->blocklen > 0 ? psdid->blocklen : BLOCKLEN);
+		SD->nextpos = SD->blocklen;
+		SD->maxpos = SD->blocklen * BLOCKNUM;
 
 		SD->hdll = LoadLibrary("dsound.dll");
 		if (SD->hdll == NULL) { printf("Failed LoadLibrary\n"); break; }
@@ -205,7 +207,7 @@ SOUNDDEVICE *CreateSoundDeviceDX3(SOUNDDEVICEINITDATA *psdid)
 
 		for (i = 0; i < BLOCKNUM; i++)
 		{
-			dsbpn[i].dwOffset = BLOCKLEN * i;
+			dsbpn[i].dwOffset = SD->blocklen * i;
 			dsbpn[i].hEventNotify = SD->hevent;
 		}
 		hr = IDirectSoundNotify_SetNotificationPositions(SD->lpdsn, BLOCKNUM, dsbpn);
