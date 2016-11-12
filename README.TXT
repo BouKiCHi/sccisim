@@ -1,4 +1,4 @@
-SCCISIM ver 1.03
+SCCISIM ver 1.04
 
 ■これは何？
 　SCCI音源シミュレータです。
@@ -15,11 +15,14 @@ sccisim.iniは無ければ自動で生成されます。
 ■sccisim.ini設定一例
 debuglog : 1でコンソール表示内容をログファイル出力
 soundlog : 1で音源ログ出力。
+use_fmgen : 1でFMGEN使用。
+pcmlog : 1でPCMファイル出力(raw)。
 nlgmode : 1でNLGで音源ログを出力
 freq : シミュレータ再生周波数
 maxchip : 払い出し可能な最大チップ数
 chiptype0 - chiptype7 : チップの種類
 chipclock0 - chipclock7 : チップクロック
+chipvol0 - chipvol7 : チップ音量
 
 ■チップの種類
 現在はSC_CHIP_TYPEと同じ数字で設定。
@@ -30,6 +33,10 @@ YM2151 : 2
 YM2413 : 10
 
 ■履歴
+20161112
+初回起動時に設定が反映されないバグを修正。
+PCM録音モード、デバイス毎ボリュームなどの追加。
+
 20161109
 設定周りを少し変更した。
 
